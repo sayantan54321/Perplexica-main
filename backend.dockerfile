@@ -10,6 +10,7 @@ COPY yarn.lock /home/perplexica/
 
 RUN mkdir /home/perplexica/data
 
+RUN yarn cache clean
 RUN yarn install --frozen-lockfile
 RUN yarn build
 

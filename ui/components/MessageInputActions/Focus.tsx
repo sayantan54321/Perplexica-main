@@ -65,6 +65,12 @@ const focusModes = [
       />
     ),
   },
+  {
+    key: 'localSearch',
+    title: 'Gika LLM',
+    description: 'Gika Search over Local Documents',
+    icon: <SwatchBook size={20} />,
+  },
 ];
 
 const Focus = ({
