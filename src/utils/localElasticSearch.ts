@@ -2,13 +2,13 @@ import { Client } from '@elastic/elasticsearch';
 
 // Define an interface for our Markdown document
 interface MarkdownDoc {
-  filename: string;
+  title: string;
   content: string;
-  last_modified: Date;
+  path: string;
 }
 
 // Create a client instance
-const client = new Client({ node: 'http://localhost:9200' });
+const client = new Client({ node: 'http://host.docker.internal:9200' });
 
 export const index_name = 'myntra';
 
@@ -33,11 +33,8 @@ export async function searchDocs(
 
     // Now the hits will be typed correctly, adding a check for `_source`
     return result.hits.hits
-      .filter((hit) => hit._source !== undefined) // Ensure _source is defined
-      .map((hit) => ({
-        ...(hit._source as MarkdownDoc),
-        last_modified: new Date(hit._source!.last_modified), // Parse 'last_modified' to a Date object
-      }));
+      .filter((hit) => hit._source)
+      .map((hit) => hit._source as MarkdownDoc);
   } catch (error) {
     console.error('Error searching documents:', error);
     return [];

@@ -156,27 +156,6 @@ const createQuestionRephrasingChain = (llm: BaseChatModel) => {
 const createElasticsearchRetrieverChain = (llm: BaseChatModel) => {
   (llm as unknown as ChatOpenAI).temperature = 0;
 
-  const summarizeDocument = async (doc: Document, query: string) => {
-    const summaryChain = RunnableSequence.from([
-      PromptTemplate.fromTemplate(documentSummarizationPrompt),
-      llm,
-      strParser,
-    ]);
-
-    const summary = await summaryChain.invoke({
-      query: query,
-      text: doc.pageContent,
-    });
-
-    return new Document({
-      pageContent: summary,
-      metadata: {
-        ...doc.metadata,
-        original_content: doc.pageContent,
-      },
-    });
-  };
-
   return RunnableSequence.from([
     createQuestionRephrasingChain(llm),
     RunnableLambda.from(async (input: { query: string }) => {
@@ -187,20 +166,85 @@ const createElasticsearchRetrieverChain = (llm: BaseChatModel) => {
       const documents = results.map(
         (doc) =>
           new Document({
-            pageContent: doc.content ? doc.content : doc.filename,
+            pageContent: doc.content ? doc.content : doc.title,
             metadata: {
-              title: doc.filename,
-              url: doc.filename,
+              title: doc.title,
+              url: doc.path, // This matches the web search structure where URL is used for source linking
             },
           }),
       );
 
-      // Summarize each document
-      const summarizedDocs = await Promise.all(
-        documents.map((doc) => summarizeDocument(doc, input.query)),
-      );
+      // Group documents by URL (filepath) like in web search
+      const docGroups: Document[] = [];
 
-      return { query: input.query, docs: summarizedDocs };
+      documents.map((doc) => {
+        const URLDocExists = docGroups.find(
+          (d) =>
+            d.metadata.url === doc.metadata.url && d.metadata.totalDocs < 10,
+        );
+
+        if (!URLDocExists) {
+          docGroups.push({
+            ...doc,
+            metadata: {
+              ...doc.metadata,
+              totalDocs: 1,
+            },
+          });
+        }
+
+        const docIndex = docGroups.findIndex(
+          (d) =>
+            d.metadata.url === doc.metadata.url && d.metadata.totalDocs < 10,
+        );
+
+        if (docIndex !== -1) {
+          docGroups[docIndex].pageContent =
+            docGroups[docIndex].pageContent + `\n\n` + doc.pageContent;
+          docGroups[docIndex].metadata.totalDocs += 1;
+        }
+      });
+
+      // Summarize grouped documents
+      let docs = [];
+      await Promise.all(
+        docGroups.map(async (doc) => {
+          const res = await llm.invoke(`
+          You are a document summarizer, tasked with summarizing a piece of text retrieved from local documents. Your job is to summarize the 
+          text into a detailed, 2-4 paragraph explanation that captures the main ideas and provides a comprehensive answer to the query.
+          If the query is "summarize", you should provide a detailed summary of the text. If the query is a specific question, you should answer it in the summary.
+          
+          - **Professional tone**: The summary should sound professional, not too casual or vague.
+          - **Thorough and detailed**: Ensure that every key point from the text is captured and that the summary directly answers the query.
+          - **Not too lengthy, but detailed**: The summary should be informative but not excessively long.
+
+          <query>
+          ${input.query}
+          </query>
+
+          <text>
+          ${doc.pageContent}
+          </text>
+        `);
+
+          const document = new Document({
+            pageContent: res.content as string,
+            metadata: {
+              title: doc.metadata.title,
+              url: doc.metadata.url, // This preserves the file path
+            },
+          });
+          console.warn(
+            document.metadata.title,
+            ':\n',
+            document.pageContent,
+            '\n\n',
+            document.metadata.url,
+          );
+          docs.push(document);
+        }),
+      );
+      return { query: input.query, docs: docs };
     }),
   ]);
 };
@@ -213,7 +257,7 @@ const createElasticsearchAnsweringChain = (
 
   const processDocs = async (docs: Document[]) => {
     return docs
-      .map((doc, index) => `${doc.metadata.docNum}. ${doc.pageContent}`)
+      .map((_, index) => `${index + 1}. ${docs[index].pageContent}`)
       .join('\n');
   };
 
