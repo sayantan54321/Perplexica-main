@@ -22,6 +22,7 @@ import LineOutputParser from '../lib/outputParsers/lineOutputParser';
 import { IterableReadableStream } from '@langchain/core/utils/stream';
 import { ChatOpenAI } from '@langchain/openai';
 import { searchDocs, index_name } from '../utils/localElasticSearch';
+import { getEmbedding, getSummary } from '../utils/precomputedData';
 
 // Question rephrasing prompt
 const questionRephrasingPrompt = `
@@ -163,16 +164,21 @@ const createElasticsearchRetrieverChain = (llm: BaseChatModel) => {
 
       const results = await searchElasticsearch(input.query, index_name);
 
-      const documents = results.map(
-        (doc) =>
-          new Document({
-            pageContent: doc.content ? doc.content : doc.title,
-            metadata: {
-              title: doc.title,
-              url: doc.path, // This matches the web search structure where URL is used for source linking
-            },
-          }),
-      );
+      const documents = results
+        .filter(
+          (doc) =>
+            typeof doc.content === 'string' || typeof doc.title === 'string',
+        )
+        .map(
+          (doc) =>
+            new Document({
+              pageContent: doc.content ? doc.content : doc.title,
+              metadata: {
+                title: doc.title,
+                url: doc.path, // This matches the web search structure where URL is used for source linking
+              },
+            }),
+        );
 
       // Group documents by URL (filepath) like in web search
       const docGroups: Document[] = [];
@@ -206,34 +212,48 @@ const createElasticsearchRetrieverChain = (llm: BaseChatModel) => {
       });
 
       // Summarize grouped documents
+      // Process documents with cache awareness
       let docs = [];
       await Promise.all(
         docGroups.map(async (doc) => {
-          const res = await llm.invoke(`
-          You are a document summarizer, tasked with summarizing a piece of text retrieved from local documents. Your job is to summarize the 
-          text into a detailed, 2-4 paragraph explanation that captures the main ideas and provides a comprehensive answer to the query.
-          If the query is "summarize", you should provide a detailed summary of the text. If the query is a specific question, you should answer it in the summary.
-          
-          - **Professional tone**: The summary should sound professional, not too casual or vague.
-          - **Thorough and detailed**: Ensure that every key point from the text is captured and that the summary directly answers the query.
-          - **Not too lengthy, but detailed**: The summary should be informative but not excessively long.
+          let summaryContent;
 
-          <query>
-          ${input.query}
-          </query>
+          // Check if summary exists in cache
+          if (getSummary(doc.metadata.url)) {
+            // Get summary from cache
+            summaryContent = getSummary(doc.metadata.url);
+            console.warn('Using cached summary for:', doc.metadata.url);
+          } else {
+            // Generate new summary if not in cache
+            const res = await llm.invoke(`
+              You are a document summarizer, tasked with summarizing a piece of text retrieved from local documents. Your job is to summarize the 
+              text into a detailed, 2-4 paragraph explanation that captures the main ideas and provides a comprehensive answer to the query.
+              If the query is "summarize", you should provide a detailed summary of the text. If the query is a specific question, you should answer it in the summary.
+              
+              - **Professional tone**: The summary should sound professional, not too casual or vague.
+              - **Thorough and detailed**: Ensure that every key point from the text is captured and that the summary directly answers the query.
+              - **Not too lengthy, but detailed**: The summary should be informative but not excessively long.
 
-          <text>
-          ${doc.pageContent}
-          </text>
-        `);
+              <query>
+              ${input.query}
+              </query>
+
+              <text>
+              ${doc.pageContent}
+              </text>
+            `);
+            summaryContent = res.content as string;
+            console.warn('Generated new summary for:', doc.metadata.url);
+          }
 
           const document = new Document({
-            pageContent: res.content as string,
+            pageContent: summaryContent,
             metadata: {
               title: doc.metadata.title,
-              url: doc.metadata.url, // This preserves the file path
+              url: doc.metadata.url,
             },
           });
+
           console.warn(
             document.metadata.title,
             ':\n',
@@ -272,10 +292,29 @@ const createElasticsearchAnsweringChain = (
       return docs;
     }
 
-    const [docEmbeddings, queryEmbedding] = await Promise.all([
-      embeddings.embedDocuments(docs.map((doc) => doc.pageContent)),
-      embeddings.embedQuery(query),
-    ]);
+    // Get query embedding
+    const queryEmbedding = await embeddings.embedQuery(query);
+    console.log(
+      'Query Embedding:',
+      typeof queryEmbedding,
+      queryEmbedding.length,
+    );
+
+    // Process document embeddings with cache awareness
+    const docEmbeddings = await Promise.all(
+      docs.map(async (doc) => {
+        if (getEmbedding(doc.metadata.url)) {
+          console.warn('Using cached embedding for:', doc.metadata.url);
+          return getEmbedding(doc.metadata.url);
+        } else {
+          console.warn('Generating new embedding for:', doc.metadata.url);
+          const embedding = (
+            await embeddings.embedDocuments([doc.pageContent])
+          )[0];
+          return embedding;
+        }
+      }),
+    );
 
     const similarity = docEmbeddings.map((docEmbedding, i) => ({
       index: i,
