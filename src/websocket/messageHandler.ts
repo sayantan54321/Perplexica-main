@@ -7,6 +7,7 @@ import handleWolframAlphaSearch from '../agents/wolframAlphaSearchAgent';
 import handleYoutubeSearch from '../agents/youtubeSearchAgent';
 import handleRedditSearch from '../agents/redditSearchAgent';
 import handleLocalSearch from '../agents/localSearchAgent';
+import extractAttributes from '../agents/queryGeneratorAgent';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { Embeddings } from '@langchain/core/embeddings';
 import logger from '../utils/logger';
@@ -37,6 +38,7 @@ export const searchHandlers = {
   youtubeSearch: handleYoutubeSearch,
   redditSearch: handleRedditSearch,
   localSearch: handleLocalSearch,
+  querygenerator: extractAttributes
 };
 
 const handleEmitterEvents = (

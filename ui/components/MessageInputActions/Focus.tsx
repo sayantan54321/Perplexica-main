@@ -5,6 +5,7 @@ import {
   Pencil,
   ScanEye,
   SwatchBook,
+  Book
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -70,6 +71,12 @@ const focusModes = [
     title: 'Gika LLM',
     description: 'Gika Search over Local Documents',
     icon: <SwatchBook size={20} />,
+  },
+  {
+    key: 'localSearch',
+    title: 'Gika AI',
+    description: 'Generate attributes for search queries',
+    icon: <Book size={20} />,
   },
 ];
 
