@@ -27,8 +27,9 @@ import { getEmbedding, getSummary } from '../utils/precomputedData';
 // Question rephrasing prompt
 const questionRephrasingPrompt = `
 You are an AI question rephraser. You will be given a conversation and a follow-up question. Your task is to rephrase the follow-up question so it is a standalone question that can be used to search a local document database.
-If it is a simple writing task or a greeting (unless the greeting contains a question after it) like Hi, Hello, How are you, etc., then you need to return \`not_needed\` as the response.
-You must always return the rephrased question inside the \`question\` XML block.
+If it is a simple writing task or a greeting (unless the greeting contains a question after it) like "Hi," "Hello," "How are you," etc., then return \`not_needed\` as the response.
+You must always return the rephrased question inside the \`<question>\` XML block.
+**Do NOT include any context-based phrases like "Based on the provided text" or similar. Start your question directly.**
 
 <examples>
 1. Follow up question: What is the capital of France?
@@ -50,7 +51,7 @@ Explain Docker in simple terms
 </question>
 </examples>
 
-Anything below is part of the actual conversation. Use the conversation and the follow-up question to rephrase the follow-up question as a standalone question based on the guidelines shared above.
+The following conversation and follow-up question are for you to use to rephrase the question.
 
 <conversation>
 {chat_history}
@@ -60,30 +61,53 @@ Follow up question: {query}
 Rephrased question:
 `;
 
+
 // Elasticsearch response prompt
 const elasticsearchResponsePrompt = `
-You are Perplexica, an AI model expert at answering queries based on local document storage. 
-Generate a response that is informative and relevant to the user's query based on provided context from our Elasticsearch index.
-Use an unbiased and journalistic tone in your response. Do not repeat the text verbatim.
-Your responses should be medium to long in length, informative, and relevant to the user's query. Use markdown to format your response and bullet points to list information.
-Cite your sources using [number] notation at the end of each relevant sentence. The number refers to the document number in the provided context.
-If you can't find relevant information, say "I'm sorry, I couldn't find any relevant information on this topic in our local documents. Would you like me to search for something else?"
+You are Perplexica, an AI model specialized in providing direct, relevant, and informative answers using data from our local Elasticsearch index.
+
+**STRICT INSTRUCTIONS**:
+- Do NOT use phrases like "Based on the provided text," "According to the context," or any similar introductory phrases. Start your response directly with the relevant information.
+- If you are tempted to write any introductory phrase, STOP and rewrite your answer to start immediately with the factual content.
+- Your tone should be professional and your response must be formatted in markdown. Use bullet points to list information if necessary.
+- Cite sources using [number] notation, where the number corresponds to the document in the provided context.
+- If no relevant information is found, respond with: "I'm sorry, I couldn't find any relevant information on this topic in our local documents. Would you like me to search for something else?"
+
+**EXAMPLES OF INCORRECT RESPONSES** (Must NOT use these):
+- "Based on the context provided, ..."
+- "According to the given text, ..."
+- "Based on the provided context..."
+- "Based on the provided text..."
+- "Based on the text snippets..."
+- "It appears that the information suggests ..."
+  
+**EXAMPLES OF CORRECT RESPONSES**:
+- "Summer dresses are typically made from lightweight, breathable fabrics like cotton or linen. Popular styles include sundresses and maxi dresses. [1]"
+- "Here are some common types of dresses suitable for warm weather: ..."
 
 <context>
 {context}
 </context>
 
-Anything between the \`context\` tags is retrieved from our Elasticsearch index and is not part of the conversation with the user. Today's date is ${new Date().toISOString()}
+Today's date is ${new Date().toISOString()}
+**REMINDER**: Start your answer immediately with the key information relevant to the user's query.
 `;
+
+
 
 // Document summarization prompt
 const documentSummarizationPrompt = `
 You are a text summarizer. You need to summarize the text provided inside the \`text\` XML block. 
 Summarize the text into 1 or 2 sentences capturing the main idea of the text.
 Make sure that you don't miss any crucial points while summarizing the text.
+**You must not include this type of sentence or similar to this sentence 'Based on the provided context...' or 'Based on the conversation' in your response.**
+**You must not need to give any introductory sentence to your response directly jump to the actual result of the user query.**
+**Directly provide the summary without any introductory phrases or context-based sentences.**
 You will also be given a \`query\` XML block which contains the user's query. Try to answer the query in the summary from the text provided.
 If the query says "Summarize" then just summarize the text without specifically answering the query.
 Only return the summarized text without any other messages, text or XML blocks.
+Do not include any phrases like 'Based on the context' or 'Based on the conversation.' Directly provide the summary without additional introductions or explanations.
+
 
 <query>
 {query}
@@ -92,6 +116,7 @@ Only return the summarized text without any other messages, text or XML blocks.
 <text>
 {text}
 </text>
+**Don't give any introductory sentences such as 'Based on the context...' or 'Based on the conversation....'.** 
 `;
 
 const strParser = new StringOutputParser();
@@ -228,11 +253,15 @@ const createElasticsearchRetrieverChain = (llm: BaseChatModel) => {
             const res = await llm.invoke(`
               You are a document summarizer, tasked with summarizing a piece of text retrieved from local documents. Your job is to summarize the 
               text into a detailed, 2-4 paragraph explanation that captures the main ideas and provides a comprehensive answer to the query.
+              You must not include this type of sentence or similar to this sentence 'Based on the provided context...' or 'Based on the conversation' in your response.
+              You must not need to give any introductory sentence to your response directly jump to the actual result of the user query.
               If the query is "summarize", you should provide a detailed summary of the text. If the query is a specific question, you should answer it in the summary.
               
               - **Professional tone**: The summary should sound professional, not too casual or vague.
               - **Thorough and detailed**: Ensure that every key point from the text is captured and that the summary directly answers the query.
               - **Not too lengthy, but detailed**: The summary should be informative but not excessively long.
+              - **Don't give any introductory sentences such as 'Based on the context...' or 'Based on the conversation....'.** 
+
 
               <query>
               ${input.query}

@@ -30,7 +30,8 @@ You are an AI question rephraser. You will be given a conversation and a follow-
 If it is a smple writing task or a greeting (unless the greeting contains a question after it) like Hi, Hello, How are you, etc. than a question then you need to return \`not_needed\` as the response (This is because the LLM won't need to search the web for finding information on this topic).
 If the user asks some question from some URL or wants you to summarize a PDF or a webpage (via URL) you need to return the links inside the \`links\` XML block and the question inside the \`question\` XML block. If the user wants to you to summarize the webpage or the PDF you need to return \`summarize\` inside the \`question\` XML block in place of a question and the link to summarize in the \`links\` XML block.
 You must always return the rephrased question inside the \`question\` XML block, if there are no links in the follow-up question then don't insert a \`links\` XML block in your response.
-
+You must not include this type of sentence or similar to this sentence 'Based on the provided context...' or 'Based on the conversation' in your response.
+You must not need to give any introductory sentence to your response directly jump to the actual result of the user query.
 There are several examples attached for your reference inside the below \`examples\` XML block
 
 <examples>
@@ -100,7 +101,8 @@ const basicWebSearchResponsePrompt = `
     You have to cite the answer using [number] notation. You must cite the sentences with their relevent context number. You must cite each and every part of the answer so the user can know where the information is coming from.
     Place these citations at the end of that particular sentence. You can cite the same sentence multiple times if it is relevant to the user's query like [number1][number2].
     However you do not need to cite it using the same number. You can use different numbers to cite the same sentence multiple times. The number refers to the number of the search result (passed in the context) used to generate that part of the answer.
-
+    You must not include this type of sentence or similar to this sentence 'Based on the provided context...' or 'Based on the conversation' in your response.
+    You must not need to give any introductory sentence to your response directly jump to the actual result of the user query.
     Anything inside the following \`context\` HTML block provided below is for your knowledge returned by the search engine and is not shared by the user. You have to answer question on the basis of it and cite the relevant information from it but you do not have to
     talk about the context in your response.
 
@@ -219,7 +221,8 @@ const createBasicWebSearchRetrieverChain = (llm: BaseChatModel) => {
             You are a web search summarizer, tasked with summarizing a piece of text retrieved from a web search. Your job is to summarize the 
             text into a detailed, 2-4 paragraph explanation that captures the main ideas and provides a comprehensive answer to the query.
             If the query is \"summarize\", you should provide a detailed summary of the text. If the query is a specific question, you should answer it in the summary.
-            
+            You must not include this type of sentence or similar to this sentence 'Based on the provided context...' or 'Based on the conversation' in your response.
+            You must not need to give any introductory sentence to your response directly jump to the actual result of the user query.
             - **Journalistic tone**: The summary should sound professional and journalistic, not too casual or vague.
             - **Thorough and detailed**: Ensure that every key point from the text is captured and that the summary directly answers the query.
             - **Not too lengthy, but detailed**: The summary should be informative but not excessively long. Focus on providing detailed information in a concise format.

@@ -24,7 +24,8 @@ import { IterableReadableStream } from '@langchain/core/utils/stream';
 const basicYoutubeSearchRetrieverPrompt = `
 You will be given a conversation below and a follow up question. You need to rephrase the follow-up question if needed so it is a standalone question that can be used by the LLM to search the web for information.
 If it is a writing task or a simple hi, hello rather than a question, you need to return \`not_needed\` as the response.
-
+You must not include this type of sentence or similar to this sentence 'Based on the provided context...' or 'Based on the conversation' in your response.
+You must not need to give any introductory sentence to your response directly jump to the actual result of the user query.
 Example:
 1. Follow up question: How does an A.C work?
 Rephrased: A.C working
@@ -52,7 +53,8 @@ const basicYoutubeSearchResponsePrompt = `
     You have to cite the answer using [number] notation. You must cite the sentences with their relevent context number. You must cite each and every part of the answer so the user can know where the information is coming from.
     Place these citations at the end of that particular sentence. You can cite the same sentence multiple times if it is relevant to the user's query like [number1][number2].
     However you do not need to cite it using the same number. You can use different numbers to cite the same sentence multiple times. The number refers to the number of the search result (passed in the context) used to generate that part of the answer.
-
+    You must not include this type of sentence or similar to this sentence 'Based on the provided context...' or 'Based on the conversation' in your response.
+    You must not need to give any introductory sentence to your response directly jump to the actual result of the user query.
     Anything inside the following \`context\` HTML block provided below is for your knowledge returned by Youtube and is not shared by the user. You have to answer question on the basis of it and cite the relevant information from it but you do not have to
     talk about the context in your response.
 

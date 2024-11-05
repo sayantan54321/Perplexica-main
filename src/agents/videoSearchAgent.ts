@@ -13,7 +13,8 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 const VideoSearchChainPrompt = `
   You will be given a conversation below and a follow up question. You need to rephrase the follow-up question so it is a standalone question that can be used by the LLM to search Youtube for videos.
   You need to make sure the rephrased question agrees with the conversation and is relevant to the conversation.
-  
+  You must not include this type of sentence or similar to this sentence 'Based on the provided context...' or 'Based on the conversation' in your response.
+  You must not need to give any introductory sentence to your response directly jump to the actual result of the user query.
   Example:
   1. Follow up question: How does a car work?
   Rephrased: How does a car work?
