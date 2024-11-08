@@ -17,6 +17,7 @@ import Copy from './MessageActions/Copy';
 import Rewrite from './MessageActions/Rewrite';
 import MessageSources from './MessageSources';
 import SearchImages from './SearchImages';
+import SearchProdImages from './SearchProdImages';
 import SearchVideos from './SearchVideos';
 import { useSpeech } from 'react-text-to-speech';
 
@@ -191,6 +192,11 @@ const MessageBox = ({
             <SearchVideos
               chat_history={history.slice(0, messageIndex - 1)}
               query={history[messageIndex - 1].content}
+            />
+            <SearchProdImages
+              query={history[messageIndex - 1].content}
+              output={history[messageIndex].content}
+              chat_history={history.slice(0, messageIndex - 1)}
             />
           </div>
         </div>
